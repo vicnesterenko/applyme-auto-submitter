@@ -1,0 +1,28 @@
+[project]
+name = "applyme-auto-submitter"
+version = "0.1.0"
+description = "Playwright-based bot that auto-fills and submits Lever job applications from a candidate profile."
+authors = [
+    { name = "Viktoriia Nesterenko", email = "vicway.nesterenko@gmail.com" },
+]
+readme = "README.md"
+requires-python = ">=3.13,<4.0"
+dependencies = [
+    "playwright (>=1.60.0,<2.0.0)",
+    "playwright-stealth (>=2.0.3,<3.0.0)",
+    "python-docx (>=1.2.0,<2.0.0)",
+    "reportlab (>=4.5.1,<5.0.0)",
+    "requests (>=2.34.2,<3.0.0)",
+]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+pytest-asyncio = "^0.25.0"
+ruff = "^0.8.4"
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
