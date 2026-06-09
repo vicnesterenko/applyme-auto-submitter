@@ -188,6 +188,3 @@ injected by a secret manager in production.
 | `APPLYME_MAX_DELAY`       | `3`     | Max politeness delay between submissions (seconds)            |
 
 ---
-
-See [`REPORT.md`](REPORT.md) for the approach, the requests the frontend/API
-makes, limitations, and what is needed to scale to ~1000s of applications.
