@@ -3,7 +3,7 @@ from pathlib import Path
 from docx import Document
 
 from resources.values import PROFILE_DOCX, RESUME_DOCX, DEFAULT_RESUME_PDF
-from docx_to_pdf import build_resume_pdf
+from helpers.docx_to_pdf import build_resume_pdf
 
 
 def _docx_text(path: str) -> str:
@@ -152,12 +152,3 @@ def load_candidate_data() -> tuple[dict, str]:
     candidate_data = profile_to_candidate(profile, resume_text)
     resume_path_data = ensure_resume_pdf()
     return candidate_data, resume_path_data
-
-
-if __name__ == "__main__":
-    if DEFAULT_RESUME_PDF.exists():
-        DEFAULT_RESUME_PDF.unlink()
-
-    candidate, resume_path = load_candidate_data()
-    print(json.dumps(candidate, ensure_ascii=False, indent=2))
-    print(f"\nResume PDF successfully created at: {resume_path}")

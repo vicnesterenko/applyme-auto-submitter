@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-FONT_URL_FOR_PDF = "https://github.com/hanyas/reportlab/raw/master/src/reportlab/fonts/DejaVuSans.ttf"
+FONT_URL_FOR_PDF = "https://raw.githubusercontent.com/python-pillow/Pillow/main/Tests/fonts/DejaVuSans/DejaVuSans.ttf"
 
 JOBS_URLS = [
     "https://jobs.lever.co/aledade/6fd40837-f0c2-4e8a-b22c-ae94e9145732",
@@ -21,3 +21,4 @@ PROFILE_DOCX = MAIN_DIR / "profile_candidate.docx"
 RESUME_DOCX = MAIN_DIR / "resume.docx"
 DEFAULT_RESUME_PDF = MAIN_DIR / "pdf_resume" / "resume.pdf"
 LOCAL_DOWNLOAD_PATH = MAIN_DIR / "DejaVuSans.ttf"
+SCREENSHOTS_DIR = MAIN_DIR / "screenshots_auto_apply"

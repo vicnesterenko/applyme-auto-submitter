@@ -8,7 +8,7 @@ from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
 
 from helpers.parse_docx import load_candidate_data
-from resources.values import JOBS_URLS, USER_AGENT
+from resources.values import JOBS_URLS, SCREENSHOTS_DIR, USER_AGENT
 
 HEADLESS = os.getenv("HEADLESS", "false").lower() == "true"
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() != "false"
@@ -359,6 +359,7 @@ async def submit_applications(
     os.makedirs(screenshot_dir, exist_ok=True)
     stealth = Stealth()
     results = []
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=headless,
@@ -367,25 +368,24 @@ async def submit_applications(
                 "--no-sandbox",
             ],
         )
-        try:
-            for url in urls:
-                res = await apply_to_job(
-                    browser,
-                    url,
-                    stealth,
-                    candidate,
-                    resume_path,
-                    dry_run=dry_run,
-                    screenshot_dir=screenshot_dir,
-                )
-                results.append(res)
-                await asyncio.sleep(random.uniform(3, 7))
-        finally:
-            await browser.close()
+
+        for url in urls:
+            res = await apply_to_job(
+                browser=browser,
+                url=url,
+                stealth=stealth,
+                candidate=candidate,
+                resume_path=resume_path,
+                dry_run=dry_run,
+                screenshot_dir=screenshot_dir,
+            )
+            results.append(res)
+            await asyncio.sleep(random.uniform(3, 7))
+        await browser.close()
+
     return results
 
-
-async def main():
+async def auto_submitter():
     candidate, resume_path = load_candidate_data()
     print(f"Candidate Target profile: {candidate['name']} ({candidate['email']})")
     print(f"Associated resume: {resume_path}")
@@ -397,6 +397,7 @@ async def main():
         urls=JOBS_URLS,
         dry_run=DRY_RUN,
         headless=HEADLESS,
+        screenshot_dir=str(SCREENSHOTS_DIR),
     )
 
     print("\n=== EXECUTION SUBMISSION REPORT ===")
@@ -409,4 +410,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(auto_submitter())
