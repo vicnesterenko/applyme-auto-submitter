@@ -1,5 +1,6 @@
 import asyncio
 import json
+import traceback
 
 from helpers.parse_docx import load_candidate_data
 from resources.values import DEFAULT_RESUME_PDF
@@ -11,14 +12,15 @@ async def main():
         if DEFAULT_RESUME_PDF.exists():
             DEFAULT_RESUME_PDF.unlink()
 
-            candidate, resume_path = load_candidate_data()
+        candidate, resume_path = load_candidate_data()
 
-            print(json.dumps(candidate, ensure_ascii=False, indent=2))
-            print(f"\nResume PDF successfully created at: {resume_path}")
+        print(json.dumps(candidate, ensure_ascii=False, indent=2))
+        print(f"\nResume PDF successfully created at: {resume_path}")
 
-            await auto_submitter()
+        await auto_submitter()
     except Exception as e:
-        print(e)
+        print(f"Помилка під час виконання: {e}")
+        traceback.print_exc()
 
 if __name__ == "__main__":
     asyncio.run(main())
