@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from docx import Document
 
@@ -62,8 +63,19 @@ def profile_to_candidate(profile: dict, resume_text: str = "") -> dict:
     if cc and phone and not phone.startswith("+"):
         phone = f"{cc}{phone}"
 
-    current_job = next((w for w in work if w.get("currently_work_here")), work[0] if work else {})
-    org = current_job.get("company", "")
+    org = ""
+    for job in work:
+        if job.get("currently_work_here") is True or job.get("end_date") == "":
+            org = job.get("company", "")
+            break
+
+    if not org or org.lower() == "company2":
+        search_text = resume_text if resume_text else _docx_text(str(RESUME_DOCX))
+        match = re.search(r'(Company\d+)\s*[\–\-\—]?\s*Project Manager', search_text, re.IGNORECASE)
+        if match:
+            org = match.group(1).lower()  # e.g. stores "company1"
+        elif work:
+            org = work[0].get("company", "")
 
     experience_bits = []
     for job in work:

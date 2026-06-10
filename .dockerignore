@@ -16,7 +16,7 @@ __pycache__/
 .ruff_cache/
 
 # Local run artifacts
-results.json
+resources/result_report/results.json
 *.png
 resources/DejaVuSans.ttf
 

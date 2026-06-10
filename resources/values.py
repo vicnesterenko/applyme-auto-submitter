@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 
@@ -22,3 +23,5 @@ RESUME_DOCX = MAIN_DIR / "resume.docx"
 DEFAULT_RESUME_PDF = MAIN_DIR / "pdf_resume" / "resume.pdf"
 LOCAL_DOWNLOAD_PATH = MAIN_DIR / "DejaVuSans.ttf"
 SCREENSHOTS_DIR = MAIN_DIR / "screenshots_auto_apply"
+
+TWO_CAPTCHA_API_KEY = os.getenv("TWO_CAPTCHA_API_KEY", "")

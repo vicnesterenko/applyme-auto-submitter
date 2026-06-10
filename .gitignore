@@ -1,0 +1,29 @@
+# Browser profiles & run artifacts (regenerated on each run)
+playwright_user_data/
+chrome_profile/
+chrome_profile_sbase/
+chrome_profile_selenium/
+downloaded_files/
+
+# Downloaded font cache (fetched automatically by helpers/docx_to_pdf.py)
+resources/DejaVuSans.ttf
+
+# Python caches & bytecode
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Virtualenvs
+.venv/
+.venvllia/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
