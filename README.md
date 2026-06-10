@@ -81,14 +81,6 @@ variables:
 ## Usage
 
 ```bash
-# Run the apply flow over JOBS_URLS
-poetry run python apply_bot.py
-
-# With automated hCaptcha solving
-TWO_CAPTCHA_API_KEY=your_key poetry run python apply_bot.py
-
-# Alternative entry point: prints the parsed candidate JSON and regenerates the
-# résumé PDF, then runs the same flow
 poetry run python main.py
 ```
 
