@@ -55,7 +55,9 @@ def profile_to_candidate(profile: dict, resume_text: str = "") -> dict:
     industries = profile.get("industries_experience") or []
     wanted_work_type = profile.get("wanted_work_type") or []
     wanted_job_type = profile.get("wanted_job_type") or []
-    job_titles = [j.get("job_title", "") for j in profile.get("job_titles", []) if j.get("job_title")]
+    job_titles = [
+        j.get("job_title", "") for j in profile.get("job_titles", []) if j.get("job_title")
+    ]
 
     first = personal.get("first_name", "")
     last = personal.get("last_name", "")
