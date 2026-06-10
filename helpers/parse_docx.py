@@ -1,10 +1,11 @@
 import json
-import re
 from pathlib import Path
+import re
+
 from docx import Document
 
-from resources.values import PROFILE_DOCX, RESUME_DOCX, DEFAULT_RESUME_PDF
 from helpers.docx_to_pdf import build_resume_pdf
+from resources.values import DEFAULT_RESUME_PDF, PROFILE_DOCX, RESUME_DOCX
 
 
 def _docx_text(path: str) -> str:
