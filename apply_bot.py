@@ -1,18 +1,20 @@
-# ruff: noqa: E402, F541
-# E402: imports must run after the distutils/SSL shim below.
-# F541: one JS template below is an f-string with no interpolation (kept for parity).
-# ---------------------------------------------------------------------
-# Compatibility shims for Python 3.13+ on macOS:
-#  * distutils.version.LooseVersion was removed in Python 3.12, but the
-#    SeleniumBase driver auto-update path still imports it, so we back it
-#    with packaging.version.Version.
-#  * Relax SSL verification so the ChromeDriver/font downloads don't fail
-#    on machines with an incomplete certificate chain.
-# ---------------------------------------------------------------------
 import sys
 import types
 import ssl
+import json
+import os
+import random
+import time
+import base64
+
 from packaging.version import Version as OriginalVersion
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException, WebDriverException
+from seleniumbase import DriverContext
+from twocaptcha import TwoCaptcha
+
+from helpers.parse_docx import load_candidate_data
+from resources.values import JOBS_URLS, SCREENSHOTS_DIR, TWO_CAPTCHA_API_KEY
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -34,27 +36,11 @@ version_module.LooseVersion = FakeLooseVersion
 distutils_module.version = version_module
 sys.modules["distutils"] = distutils_module
 sys.modules["distutils.version"] = version_module
-# ---------------------------------------------------------------------
-
-import json
-import os
-import random
-import time
-import base64
-
-from selenium.webdriver.common.by import By
-from seleniumbase import DriverContext
-from twocaptcha import TwoCaptcha
-
-from helpers.parse_docx import load_candidate_data
-from resources.values import JOBS_URLS, SCREENSHOTS_DIR, TWO_CAPTCHA_API_KEY
-
 
 RESULTS_PATH = os.path.abspath("resources/result_report/results.json")
 PROFILE_DIR = os.path.abspath("chrome_profile_sbase")
-
-# When True, forms are filled and screenshotted but never submitted.
 DRY_RUN = False
+
 
 def human_delay(min_sec=1.5, max_sec=3.5):
     time.sleep(random.uniform(min_sec, max_sec))
@@ -79,7 +65,8 @@ def human_fill_sbase(driver, element, value):
 
         human_delay(0.3, 0.8)
         return True
-    except BaseException:
+    except WebDriverException as e:
+        print(f"  [human_fill] Failed to interact with element: {e}")
         return False
 
 
@@ -89,37 +76,27 @@ def get_clean_answer(label_text, candidate):
 
     if any(k in t for k in ["salary", "compensation", "очікувана зп", "budgeted", "range", "desired", "pay"]):
         return str(candidate.get("salary") or "140000")
-
     if "current company" in t or "company" in t:
         return str(candidate.get("org") or "company1")
-
     if "sponsorship" in t or "sponsor" in t or "visa" in t:
         return "No"
-
     if "relocat" in t:
         return candidate.get("willing_to_relocate") or "No"
-
     if any(k in t for k in ["authorized", "authorised", "legal", "lawfully", "eligible", "permit"]):
         if "canada" in t or "uk" in t:
             return "No"
         return "Yes"
-
     if any(k in t for k in ["how did you learn", "hear about", "source"]):
         return "LinkedIn"
-
     if any(k in t for k in
            ["degree", "python", "learning", "statistical", "optimization", "data", "spark", "experience", "years"]):
         return "Yes"
-
     if any(k in t for k in ["bound", "covenant", "restrict", "non-compete"]):
         return "No"
-
     if any(k in t for k in ["acknowledge", "certify", "confirm", "understand", "agree"]):
         return "Yes"
-
     if "notice" in t or "start" in t:
         return "Immediately"
-
     return ""
 
 
@@ -129,17 +106,15 @@ def apply_company_specific_bypass(driver, url, candidate):
     salary_value = str(candidate.get("salary") or "140000")
     linkedin_value = str(candidate.get("linkedin") or "https://linkedin.com/tsttst123123123123123")
 
-    # PadSplit: LinkedIn URL, location, multiple-choice radios, and the free-text question.
-    if "padsplit" in lowered_url:
-        print("  [PadSplit] Applying company-specific field overrides...")
-        try:
+    try:
+        if "padsplit" in lowered_url:
+            print("  [PadSplit] Applying company-specific field overrides...")
             driver.execute_script(f"""
                 const li_field = document.querySelector('input[name*="LinkedIn"], input[name*="linkedin"], input[name*="urls"]');
                 if (li_field) {{
                     li_field.value = '{linkedin_value}';
                     li_field.dispatchEvent(new Event('input', {{ bubbles: true }}));
                 }}
-
                 const loc_input = document.getElementById('location-input');
                 if (loc_input) {{
                     loc_input.value = 'New York, NY, United States';
@@ -147,7 +122,6 @@ def apply_company_specific_bypass(driver, url, candidate):
                     const hidden_loc = document.getElementById('selected-location');
                     if (hidden_loc) hidden_loc.value = 'New York, NY, United States';
                 }}
-
                 const radioGroups = document.querySelectorAll('ul[data-qa="multiple-choice"]');
                 radioGroups.forEach(group => {{
                     const visibleRadios = [...group.querySelectorAll('input[type="radio"]')].filter(r => r.offsetHeight > 0);
@@ -159,7 +133,6 @@ def apply_company_specific_bypass(driver, url, candidate):
                         visibleRadios[0].dispatchEvent(new Event('change', {{ bubbles: true }}));
                     }}
                 }});
-
                 const hot_take = document.querySelector('textarea[name*="field14"], textarea');
                 if (hot_take && !hot_take.value) {{
                     hot_take.value = 'Good copywriting isn\\'t about fancy words; it\\'s about clear, data-driven empathy that solves a customer problem.';
@@ -167,13 +140,9 @@ def apply_company_specific_bypass(driver, url, candidate):
                 }}
             """)
             human_delay(0.5, 1.0)
-        except Exception as e:
-            print(f"  [PadSplit] Field override warning: {e}")
 
-    # Aledade: fill the salary field.
-    elif "aledade" in lowered_url:
-        print("  [Aledade] Applying company-specific field overrides...")
-        try:
+        elif "aledade" in lowered_url:
+            print("  [Aledade] Applying company-specific field overrides...")
             driver.execute_script(f"""
                 const inputs = document.querySelectorAll('input, textarea');
                 inputs.forEach(el => {{
@@ -184,13 +153,9 @@ def apply_company_specific_bypass(driver, url, candidate):
                     }}
                 }});
             """)
-        except Exception as e:
-            print(f"  [Aledade] Field override warning: {e}")
 
-    # The Athletic: fill the free-text statement question.
-    elif "theathletic" in lowered_url or "athletic" in lowered_url:
-        print("  [The Athletic] Applying company-specific field overrides...")
-        try:
+        elif "theathletic" in lowered_url or "athletic" in lowered_url:
+            print("  [The Athletic] Applying company-specific field overrides...")
             driver.execute_script(f"""
                 const stmt = document.querySelector('textarea[name*="field0"], textarea');
                 if (stmt && !stmt.value) {{
@@ -198,22 +163,25 @@ def apply_company_specific_bypass(driver, url, candidate):
                     stmt.dispatchEvent(new Event('input', {{ bubbles: true }}));
                 }}
             """)
-        except Exception as e:
-            print(f"  [The Athletic] Field override warning: {e}")
+    except WebDriverException as e:
+        print(f"  [Bypass] Field override warning: {e}")
 
 
 def fill_lever_custom_fields_sbase(driver, candidate):
     """Detect and auto-fill Lever's custom question cards (radios, text inputs, selects, checkboxes)."""
-    form_cards = driver.find_elements(
-        By.CSS_SELECTOR,'.application-question, .application-card, .card, .custom-question'
-    )
+    form_cards = driver.find_elements(By.CSS_SELECTOR,
+                                      '.application-question, .application-card, .card, .custom-question')
     if not form_cards:
         form_cards = driver.find_elements(By.TAG_NAME, 'div')
 
     for card in form_cards:
         try:
-            label_el = card.find_element(By.CSS_SELECTOR, '.text, label, .application-label')
-            label_text = label_el.text.strip()
+            try:
+                label_el = card.find_element(By.CSS_SELECTOR, '.text, label, .application-label')
+                label_text = label_el.text.strip()
+            except NoSuchElementException:
+                continue
+
             if not label_text:
                 continue
 
@@ -221,7 +189,7 @@ def fill_lever_custom_fields_sbase(driver, candidate):
             radios = card.find_elements(By.CSS_SELECTOR, 'input[type="radio"]')
             if radios:
                 visible_radios = [r for r in radios if r.is_displayed()]
-                if not visible_radios or any([r.is_selected() for r in visible_radios]):
+                if not visible_radios or any(r.is_selected() for r in visible_radios):
                     continue
 
                 t = label_text.lower()
@@ -229,17 +197,10 @@ def fill_lever_custom_fields_sbase(driver, candidate):
 
                 if "sponsor" in t or "visa" in t:
                     target_value = "No"
-                elif any(
-                        k in t for k in
-                        [
-                            "authorized", "authorised", "legal", "lawfully", "eligible", "accept", "offer", "degree",
-                            "python", "learning", "experience", "years", "data", "spark"
-                         ]
-                ):
-                    if "canada" in t or "uk" in t:
-                        target_value = "No"
-                    else:
-                        target_value = "Yes"
+                elif any(k in t for k in
+                         ["authorized", "authorised", "legal", "lawfully", "eligible", "accept", "offer", "degree",
+                          "python", "learning", "experience", "years", "data", "spark"]):
+                    target_value = "No" if ("canada" in t or "uk" in t) else "Yes"
                 elif any(k in t for k in ["bound", "covenant", "restrict", "non-compete"]):
                     target_value = "No"
                 elif any(k in t for k in ["text messages", "opt-in", "refer", "employed by"]):
@@ -262,86 +223,78 @@ def fill_lever_custom_fields_sbase(driver, candidate):
                 continue
 
             # 2. Text Inputs / Textareas / Number Fields processing
-            try:
-                text_input = card.find_element(By.CSS_SELECTOR, 'input, textarea')
-                if text_input.is_displayed():
-                    input_type = text_input.get_attribute("type") or ""
-                    input_name = text_input.get_attribute("name") or ""
+            text_inputs = card.find_elements(By.CSS_SELECTOR, 'input, textarea')
+            if text_inputs and text_inputs[0].is_displayed():
+                text_input = text_inputs[0]
+                input_type = text_input.get_attribute("type") or ""
+                input_name = text_input.get_attribute("name") or ""
 
-                    if input_type not in ["submit", "button", "hidden", "file", "radio", "checkbox"]:
-                        if not any(k in label_text.lower() or k in input_name.lower() for k in
-                                   ['email', 'phone', 'current location', 'location', 'name']):
-                            current_val = text_input.get_attribute("value")
+                if input_type not in ["submit", "button", "hidden", "file", "radio", "checkbox"]:
+                    if not any(k in label_text.lower() or k in input_name.lower() for k in
+                               ['email', 'phone', 'current location', 'location', 'name']):
+                        current_val = text_input.get_attribute("value")
 
-                            if current_val and (
-                                    "company" in label_text.lower() or "current company" in label_text.lower()):
-                                if current_val.lower() == "company2":
-                                    driver.execute_script("arguments[0].value = '';", text_input)
-                                    current_val = ""
+                        if current_val and ("company" in label_text.lower() or "current company" in label_text.lower()):
+                            if current_val.lower() == "company2":
+                                driver.execute_script("arguments[0].value = '';", text_input)
+                                current_val = ""
 
-                            if not current_val or not current_val.strip():
-                                answer = get_clean_answer(label_text, candidate)
-                                if answer:
-                                    driver.execute_script("arguments[0].value = arguments[1];", text_input, answer)
-                                    driver.execute_script(
-                                        "arguments[0].dispatchEvent(new Event('input', {bubbles: true}));", text_input)
-            except Exception as e:
-                print(f"  [PadSplit] Field override warning: {e}")
-                pass
+                        if not current_val or not current_val.strip():
+                            answer = get_clean_answer(label_text, candidate)
+                            if answer:
+                                driver.execute_script("arguments[0].value = arguments[1];", text_input, answer)
+                                driver.execute_script(
+                                    "arguments[0].dispatchEvent(new Event('input', {bubbles: true}));", text_input)
 
             # 3. Dropdowns (Select elements) processing
-            try:
-                select_input = card.find_element(By.TAG_NAME, 'select')
-                if select_input.is_displayed():
-                    current_val = select_input.get_attribute("value")
-                    select_name = select_input.get_attribute("name") or ""
+            select_inputs = card.find_elements(By.TAG_NAME, 'select')
+            if select_inputs and select_inputs[0].is_displayed():
+                select_input = select_inputs[0]
+                current_val = select_input.get_attribute("value")
+                select_name = select_input.get_attribute("name") or ""
 
-                    if "race" in select_name.lower() or "race" in label_text.lower() or "ethnicity" in label_text.lower():
-                        driver.execute_script("""
-                            const s = arguments[0];
-                            const opt = [...s.options].find(o => /decline|not to say|choose not/i.test(o.text));
-                            if (opt) s.value = opt.value;
-                            s.dispatchEvent(new Event('change', { bubbles: true }));
-                        """, select_input)
-                        human_delay(0.4, 0.8)
-                        continue
+                if "race" in select_name.lower() or "race" in label_text.lower() or "ethnicity" in label_text.lower():
+                    driver.execute_script("""
+                        const s = arguments[0];
+                        const opt = [...s.options].find(o => /decline|not to say|choose not/i.test(o.text));
+                        if (opt) s.value = opt.value;
+                        s.dispatchEvent(new Event('change', { bubbles: true }));
+                    """, select_input)
+                    human_delay(0.4, 0.8)
+                    continue
 
-                    if "veteran" in select_name.lower() or "veteran" in label_text.lower():
-                        driver.execute_script("""
-                            const s = arguments[0];
-                            const opt = [...s.options].find(o => /not a veteran|decline/i.test(o.text));
-                            if (opt) s.value = opt.value;
-                            s.dispatchEvent(new Event('change', { bubbles: true }));
-                        """, select_input)
-                        human_delay(0.4, 0.8)
-                        continue
+                if "veteran" in select_name.lower() or "veteran" in label_text.lower():
+                    driver.execute_script("""
+                        const s = arguments[0];
+                        const opt = [...s.options].find(o => /not a veteran|decline/i.test(o.text));
+                        if (opt) s.value = opt.value;
+                        s.dispatchEvent(new Event('change', { bubbles: true }));
+                    """, select_input)
+                    human_delay(0.4, 0.8)
+                    continue
 
-                    if "outside" in label_text.lower() or "location" in label_text.lower() or "state" in label_text.lower():
-                        driver.execute_script(r"""
-                            const s = arguments[0];
-                            const opt = [...s.options].find(o => /new york|united states|inside u\.s\./i.test(o.text));
-                            if (opt) s.value = opt.value;
-                            else if (s.options.length > 1) s.value = s.options[1].value;
-                            s.dispatchEvent(new Event('change', { bubbles: true }));
-                        """, select_input)
-                        human_delay(0.4, 0.8)
-                        continue
+                if "outside" in label_text.lower() or "location" in label_text.lower() or "state" in label_text.lower():
+                    driver.execute_script(r"""
+                        const s = arguments[0];
+                        const opt = [...s.options].find(o => /new york|united states|inside u\.s\./i.test(o.text));
+                        if (opt) s.value = opt.value;
+                        else if (s.options.length > 1) s.value = s.options[1].value;
+                        s.dispatchEvent(new Event('change', { bubbles: true }));
+                    """, select_input)
+                    human_delay(0.4, 0.8)
+                    continue
 
-                    if not current_val or current_val in ['0', '-1'] or 'select' in current_val.lower():
-                        driver.execute_script("""
-                            const s = arguments[0];
-                            const opts = [...s.options].filter(o => o.value && !/select|choose|--/i.test(o.text));
-                            if (opts.length) s.value = opts[0].value;
-                            s.dispatchEvent(new Event('change', { bubbles: true }));
-                        """, select_input)
-                        human_delay(0.4, 0.8)
-            except Exception as e:
-                print(f"  [PadSplit] Field override warning: {e}")
-                pass
+                if not current_val or current_val in ['0', '-1'] or 'select' in current_val.lower():
+                    driver.execute_script("""
+                        const s = arguments[0];
+                        const opts = [...s.options].filter(o => o.value && !/select|choose|--/i.test(o.text));
+                        if (opts.length) s.value = opts[0].value;
+                        s.dispatchEvent(new Event('change', { bubbles: true }));
+                    """, select_input)
+                    human_delay(0.4, 0.8)
 
-        except Exception as e:
-            print(f"Fill lever custom fields sbase error: {e}")
-            pass
+        except WebDriverException as card_err:
+            print(f"  Error processing form card: {card_err}")
 
     # 4. Consent checkboxes
     try:
@@ -363,9 +316,8 @@ def fill_lever_custom_fields_sbase(driver, candidate):
             if cb.is_displayed() and not cb.is_selected():
                 driver.execute_script("arguments[0].click();", cb)
                 human_delay(0.3, 0.7)
-    except Exception as e:
-        print(f"  [PadSplit] Field override warning: {e}")
-        pass
+    except WebDriverException as cb_err:
+        print(f"  Error processing consent checkboxes: {cb_err}")
 
 
 def solve_hcaptcha_via_api(driver):
@@ -375,16 +327,17 @@ def solve_hcaptcha_via_api(driver):
         return False
     try:
         print("  [captcha] hCaptcha detected. Extracting sitekey...")
-        hcaptcha_container = driver.find_element(By.CSS_SELECTOR, ".h-captcha, [data-sitekey]")
-        sitekey = hcaptcha_container.get_attribute("data-sitekey")
-        current_url = driver.current_url
-
-        if not sitekey:
+        try:
+            hcaptcha_container = driver.find_element(By.CSS_SELECTOR, ".h-captcha, [data-sitekey]")
+            sitekey = hcaptcha_container.get_attribute("data-sitekey")
+        except NoSuchElementException:
             iframe = driver.find_element(By.XPATH, "//iframe[contains(@src, 'sitekey')]")
             src = iframe.get_attribute("src") or ""
             sitekey = src.split("sitekey=")[1].split("&")[0]
 
+        current_url = driver.current_url
         print(f"  [captcha] Sitekey captured: {sitekey}. Submitting task to 2Captcha...")
+
         solver = TwoCaptcha(TWO_CAPTCHA_API_KEY)
         result = solver.hcaptcha(sitekey=sitekey, url=current_url)
         token = result['code']
@@ -403,10 +356,7 @@ def solve_hcaptcha_via_api(driver):
 
 
 def apply_to_job_selenium(driver, url, candidate, resume_path):
-    if url.rstrip("/").endswith("/apply"):
-        apply_url = url.rstrip("/")
-    else:
-        apply_url = url.rstrip("/") + "/apply"
+    apply_url = url.rstrip("/") if url.rstrip("/").endswith("/apply") else url.rstrip("/") + "/apply"
 
     try:
         print(f"\nNavigating to: {apply_url}")
@@ -414,16 +364,16 @@ def apply_to_job_selenium(driver, url, candidate, resume_path):
         human_delay(3, 5)
 
         # Uploading the generated resume PDF file
+        if not os.path.exists(resume_path):
+            return {"url": url, "status": "failed", "reason": "resume_not_found"}
+
         try:
             file_input = driver.find_element(By.CSS_SELECTOR, 'input[type="file"]')
-            if not os.path.exists(resume_path):
-                return {"url": url, "status": "failed", "reason": "resume_not_found"}
-
             file_input.send_keys(os.path.abspath(resume_path))
             print("  Resume file attached successfully. Waiting 10s for layout triggers...")
             time.sleep(10.0)
-        except BaseException as fe:
-            print(f"  Failed to attach candidate resume document: {fe}")
+        except NoSuchElementException:
+            print("  [Warning] Resume file input field not found.")
 
         # Basic identity text inputs mapping
         base_fields = [
@@ -432,23 +382,17 @@ def apply_to_job_selenium(driver, url, candidate, resume_path):
         ]
 
         for selector, key in base_fields:
-            try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                if elements and elements[0].is_displayed():
-                    human_fill_sbase(driver, elements[0], candidate[key])
-            except BaseException:
-                pass
+            elements = driver.find_elements(By.CSS_SELECTOR, selector)
+            if elements and elements[0].is_displayed():
+                human_fill_sbase(driver, elements[0], candidate[key])
 
-        # Apply company-specific field overrides for known forms.
         apply_company_specific_bypass(driver, apply_url, candidate)
-
         human_delay(1, 2)
+
         fill_lever_custom_fields_sbase(driver, candidate)
         human_delay(2.0, 4.0)
 
-        # ---------------------------------------------------------------------
-        # Capture a full-page screenshot of the filled form before submitting.
-        # ---------------------------------------------------------------------
+        # Capture a full-page screenshot of the filled form before submitting
         print("  [screenshot] Capturing the filled form before submission...")
         os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
         filled_screenshot_path = os.path.join(SCREENSHOTS_DIR, f"filled_form_{int(time.time())}.png")
@@ -458,64 +402,50 @@ def apply_to_job_selenium(driver, url, candidate, resume_path):
             screenshot_data = driver.execute_cdp_cmd("Page.captureScreenshot", {
                 "format": "png",
                 "captureBeyondViewport": True,
-                "clip": {
-                    "x": 0, "y": 0, "width": content_size["width"], "height": content_size["height"], "scale": 1
-                }
+                "clip": {"x": 0, "y": 0, "width": content_size["width"], "height": content_size["height"], "scale": 1}
             })
             with open(filled_screenshot_path, "wb") as fh:
                 fh.write(base64.b64decode(screenshot_data["data"]))
             print(f"  [screenshot] Saved filled-form screenshot: {filled_screenshot_path}")
-        except BaseException as snap_err:
+        except WebDriverException as snap_err:
             print(f"  [screenshot] CDP capture failed, using fallback: {snap_err}")
             driver.save_screenshot(filled_screenshot_path)
-        # ---------------------------------------------------------------------
 
         if DRY_RUN:
             print("  [dry-run] Stopping before clicking Submit.")
             time.sleep(5.0)
             return {"url": url, "status": "dry_run_passed"}
 
-        # Submit the application for real.
+        # Submit the application
         print("  Triggering final form submission...")
         submit_selector = "button[type='submit']"
         for sel in ["#btn-submit.template-btn-submit", "#btn-submit", "button[type='submit']"]:
-            try:
-                elements = driver.find_elements(By.CSS_SELECTOR, sel)
-                if elements and elements[0].is_displayed():
-                    submit_selector = sel
-                    break
-            except Exception as e:
-                print(f"  Failed to find {sel} selector: {e}")
-                continue
+            elements = driver.find_elements(By.CSS_SELECTOR, sel)
+            if elements and elements[0].is_displayed():
+                submit_selector = sel
+                break
 
-        try:
-            submit_btn = driver.find_element(By.CSS_SELECTOR, submit_selector)
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", submit_btn)
-            human_delay(0.8, 1.5)
-            driver.uc_click(submit_selector)
-            print("  Submit button clicked. Checking the page response...")
-        except BaseException as se:
-            raise Exception(f"Submit interaction failed: {se}")
+        submit_btn = driver.find_element(By.CSS_SELECTOR, submit_selector)
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", submit_btn)
+        human_delay(0.8, 1.5)
+        driver.uc_click(submit_selector)
+        print("  Submit button clicked. Checking the page response...")
 
         time.sleep(4.0)
 
-        # If an hCaptcha appears, attempt to solve it via the 2Captcha API.
+        # If an hCaptcha appears, attempt to solve it
         is_captcha = driver.find_elements(By.CSS_SELECTOR, "iframe[title*='hCaptcha'], .h-captcha")
         if is_captcha:
             solve_hcaptcha_via_api(driver)
 
-        # Wait for the redirect to the "Thanks" confirmation page.
+        # Wait for the redirect to the "Thanks" confirmation page
         success = False
         for _ in range(25):
-            try:
-                if "thanks" in str(driver.current_url or "").lower():
-                    success = True
-                    break
-            except BaseException:
+            if "thanks" in str(driver.current_url or "").lower():
+                success = True
                 break
             time.sleep(1.0)
 
-        # Save the final screenshot for either outcome.
         if success:
             print(f"  SUCCESS: {url}")
             success_screenshot = os.path.join(SCREENSHOTS_DIR, f"success_sbase_{int(time.time())}.png")
