@@ -1,0 +1,26 @@
+# Virtualenvs (deps are installed inside the image)
+.venv/
+.venvllia/
+
+# VCS / IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Python caches
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local run artifacts
+resources/result_report/results.json
+*.png
+resources/DejaVuSans.ttf
+
+# Docs / Docker
+README.md
+Dockerfile
+.dockerignore
